@@ -37,6 +37,6 @@ _start:
     mov ss, ax              ; initialise stack segment at 0x8888
     mov sp, 0x8888          ; initialise stack pointer at 0x8888
     
-    lgdt gdt_descriptor
+    lgdt [gdt_descriptor]
 
     hlt
