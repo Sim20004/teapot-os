@@ -2,10 +2,21 @@ org 0x7C00
 bits 16
 
 _start:
+    ; DL is already set
+    mov ax, 0x0000
+    mov es, ax
+    mov ch, 0
+    mov al, 0x01
+    mov bx, 0x8000
+    mov ah, 0x02
+    mov cl, 2
+    mov dh, 0
+    int 13h
+
+
     cli                         ; disable interrupts
 
-    mov ah, 0x0e                ; show R in vga text mode
-    mov al, 'R'
+    mov ax, 0x0003
     int 0x10
 
     mov ax, 0
@@ -16,10 +27,6 @@ _start:
     mov sp, 0x7C00              ; initialise stack pointer at 0x7C00
 
     lgdt [gdt_descriptor]       ; load gdt
-
-    mov ah, 0x0e                ; show r in vga text mode
-    mov al, 'R'
-    int 0x10
 
     mov eax, cr0                ; enable protected mode
     or eax, 1
@@ -55,32 +62,29 @@ gdt_descriptor:                 ; gdt descriptor
     dw gdt_end - gdt - 1        ; gdt size
     dd gdt                      ; gdt start
 
-
-bits 32                         ; 32-bit mode
+bits 32
 
 protected_mode_start:
-
-    mov ax, 0x10                ; reinitialises stack in protected mode
+    mov ax, 0x10
     mov ds, ax
     mov es, ax
-    mov ss, ax
+    mov esi, starter          ; pointer to "Hello"
+    mov edi, 0xB8000          ; VGA text memory
+    mov ecx, starter_len      ; number of characters    
 
-    mov esp, 0x90000
-
-                                ; now we have fully initialised protected mode
-
-    mov edi, 0xB8000            ; show H in vga text mode
-    mov al, 'H'
+display_text:
+    mov al, [esi]
     mov ah, 0x07
+    mov [edi], ax
 
-    mov word [edi], ax
+    add esi, 1
+    add edi, 2
 
-    cli                         ; disable interrupts
-
-hang:
-    hlt
-    jmp hang
-
+    loop display_text
+jmp 0x08:0x8000
+    
+starter db "Hello! Welcome to TeapotOS - Booting kernel..."
+starter_len equ $ - starter
 
 times 510 - ($ - $$) db 0       ; boot sector padding
 dw 0xAA55
