@@ -67,7 +67,7 @@ protected_mode_start:
     mov al, 'H'
     mov ah, 0x07
 
-    mov [edi], ax
+    mov word [edi], ax
 
     cli
     hang:
