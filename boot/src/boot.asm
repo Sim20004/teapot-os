@@ -68,23 +68,6 @@ protected_mode_start:
     mov ax, 0x10
     mov ds, ax
     mov es, ax
-    mov esi, starter          ; pointer to "Hello"
-    mov edi, 0xB8000          ; VGA text memory
-    mov ecx, starter_len      ; number of characters    
-
-display_text:
-    mov al, [esi]
-    mov ah, 0x07
-    mov [edi], ax
-
-    add esi, 1
-    add edi, 2
-
-    loop display_text
-jmp 0x08:0x8000
-    
-starter db "Hello! Welcome to TeapotOS - Booting kernel..."
-starter_len equ $ - starter
 
 times 510 - ($ - $$) db 0       ; boot sector padding
 dw 0xAA55
