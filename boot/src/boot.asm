@@ -6,13 +6,12 @@ _start:
     mov ax, 0x0000
     mov es, ax
     mov ch, 0
-    mov al, 0x01
+    mov al, 0x04
     mov bx, 0x8000
     mov ah, 0x02
     mov cl, 2
     mov dh, 0
     int 13h
-
 
     cli                         ; disable interrupts
 
