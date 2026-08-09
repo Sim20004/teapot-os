@@ -31,6 +31,8 @@ print_char:
     mov [edi], ax
     inc dword [cursor_x]
 
+    call update_cursor
+
     cmp dword [cursor_x], 80
     je .newline_wrap
 
@@ -41,7 +43,7 @@ print_char:
     inc esi
     mov dword [cursor_x], 0
     inc dword [cursor_y]
-
+    call update_cursor
     cmp dword [cursor_y], 25
     je .screen_full
 
@@ -50,7 +52,7 @@ print_char:
     inc esi
     mov dword [cursor_x], 0
     inc dword [cursor_y]
-
+    call update_cursor
     cmp dword [cursor_y], 25
     je .screen_full
 
@@ -63,6 +65,7 @@ print_char:
     mov esi, 0xB80A0
     mov edi, 0xB8000
     mov ecx, 1920
+    call update_cursor
 
 .copy:
     mov ax, [esi]
@@ -88,15 +91,20 @@ print_char:
     
     
 clear_screen:
-    mov edi, 0xB8000    
+    mov edi, 0xB8000
     mov ecx, 2000
-    
-    .loop:
-        mov al, ' '
-        mov ah, 0x07
-        mov [edi], ax
-        add edi, 2
-        loop .loop
+
+.loop:
+    mov al, ' '
+    mov ah, 0x07
+    mov [edi], ax
+    add edi, 2
+    loop .loop
+
+    mov dword [cursor_x], 0
+    mov dword [cursor_y], 0
+    call update_cursor
+
     ret
 
 kernel_start:
@@ -104,9 +112,10 @@ kernel_start:
     mov eax, kernel_start_msg
     mov ebx, kernel_start_msg_len
     call print
-    mov eax, prompt
-    mov ebx, prompt_len
+    mov eax, prompt_first
+    mov ebx, prompt_first_len
     call print
+    call update_cursor
 
 keyboard_loop:
     in al, 0x64
@@ -141,6 +150,12 @@ keyboard_loop:
     je shift_up
 
     ; -------------------------
+    ; Backspace
+    ; -------------------------
+    cmp al, 0x0E
+    je .backspace
+
+    ; -------------------------
     ; Ignore other key releases
     ; -------------------------
 
@@ -168,17 +183,179 @@ keyboard_loop:
     je keyboard_loop
 
     mov [key_buffer], al
-
+    cmp dword [key_count], 255
+    jae keyboard_loop
+    mov edx, [key_count]
+    mov [command_buffer + edx], al
     mov eax, key_buffer
     mov ebx, 1
     call print
-
+    inc dword [key_count]
     jmp keyboard_loop
 .enter_pressed:
+    cmp dword [key_count], 0
+    je keyboard_loop
+    cmp dword [key_count], 255
+    jae keyboard_loop
+    mov edx, [key_count]
+    mov byte [command_buffer + edx], 0
+    call .handle_cmd
+    mov dword [key_count], 0
     mov eax, prompt
     mov ebx, prompt_len
-    call print 
+    call print
     jmp keyboard_loop
+
+.backspace:
+    cmp dword [cursor_x], 0
+    je keyboard_loop
+    cmp dword [key_count], 0
+    je keyboard_loop
+    dec dword [cursor_x]
+    call update_cursor
+    mov edi, 0xB8000
+    mov edx, [cursor_y]
+    imul edx, 160
+    add edi, edx
+    mov edx, [cursor_x]
+    shl edx, 1
+    add edi, edx
+    mov word [edi], 0x0720
+    dec dword [key_count]
+    mov edx, [key_count]
+    mov byte [command_buffer + edx], 0
+    jmp keyboard_loop
+.handle_cmd:
+    mov esi, command_buffer
+    mov edi, whoami
+    call strcmp
+
+    cmp eax, 1
+    je .whoami
+
+    mov edi, help
+    call strcmp
+
+    cmp eax, 1
+    je .help
+
+    mov edi, clear
+    call strcmp
+
+    cmp eax, 1
+    je .clear_cmd
+
+    mov edi, ver
+    call strcmp
+
+    cmp eax, 1
+    je .ver
+    
+
+    mov eax, cmd_not_found
+    mov ebx, cmd_not_found_len
+    call print
+    mov edi, command_buffer
+    mov ecx, 256
+    xor eax, eax
+    rep stosb
+    ret
+.ver:
+    mov eax, ver_out
+    mov ebx, ver_out_len
+    call print
+    call .clear_command
+    ret
+.clear_cmd:
+    call clear_screen
+    call .clear_command
+    mov dword [key_count], 0
+    ret
+.help:
+    mov eax, help_out
+    mov ebx, help_out_len
+    call print
+    call .clear_command
+    ret
+
+.whoami:
+    mov eax, whoami_out
+    mov ebx, whoami_out_len
+    call print
+    call .clear_command
+    ret
+
+.clear_command:
+    mov edi, command_buffer
+    mov ecx, 256
+    xor eax, eax
+    rep stosb
+    ret
+
+update_cursor:
+    push eax
+    push ebx
+    push edx
+
+    mov eax, [cursor_y]
+    mov ebx, 80
+    mul ebx
+    add eax, [cursor_x]
+
+    mov bx, ax
+
+    mov dx, 0x3D4
+    mov al, 0x0F
+    out dx, al
+
+    mov dx, 0x3D5
+    mov al, bl
+    out dx, al
+
+    mov dx, 0x3D4
+    mov al, 0x0E
+    out dx, al
+
+    mov dx, 0x3D5
+    mov al, bh
+    out dx, al
+
+    pop edx
+    pop ebx
+    pop eax
+    ret
+
+strcmp:
+.loop:
+    mov al, [esi]
+    mov dl, [edi]
+
+    cmp dl, 0
+    je .check_end
+
+    cmp al, dl
+    jne .not_equal
+
+    inc esi
+    inc edi
+    jmp .loop
+
+.check_end:
+    cmp al, 0
+    je .equal
+
+    cmp al, ' '
+    je .equal
+
+    jmp .not_equal
+
+.equal:
+    mov eax, 1
+    ret
+
+.not_equal:
+    xor eax, eax
+    ret
 
 scancode_to_ascii:
 
@@ -589,8 +766,24 @@ shift_up:
     jmp keyboard_loop
 kernel_start_msg db "Kernel started successfully!", 10, "Welcome to TeapotOS!", 10
 kernel_start_msg_len equ $ - kernel_start_msg
-prompt db 10, "TeapotOS> "
+prompt_first db 10, "TeapotOS> "
+prompt_first_len equ $ - prompt_first
+prompt db "TeapotOS> "
 prompt_len equ $ - prompt
 key_buffer db 0
 cursor_x dd 0
 cursor_y dd 0
+key_count dd 0
+command_buffer times 256 db 0
+cmd_not_found db 10, "Command not found!", 10, 10
+cmd_not_found_len equ $ - cmd_not_found
+whoami db "whoami", 0
+whoami_out db 10, "teapotos", 10, 10
+whoami_out_len equ $ - whoami_out
+help db "help", 0
+help_out db 10, "Commands:", 10, "help: prints this message", 10, "clear: clears terminal", 10, "whoami: prints current user", 10, "ver: prints TeapotOS version", 10, 10
+help_out_len equ $ - help_out 
+clear db "clear", 0
+ver db "ver", 0
+ver_out db 10, "TeapotOS v0.1.0", 10, "Build date: 09-08-2026 (DD-MM-YYYY)", 10, "Architecture: i386", 10, 10
+ver_out_len equ $ - ver_out
