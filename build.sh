@@ -69,7 +69,7 @@ command_exists() {
 
 usage() {
     cat <<EOF
-TeaPotOS build system
+TeapotOS build system
 
 Usage:
     $PROGRAM_NAME <command> [options]
@@ -187,7 +187,7 @@ run() {
         die "$OS_IMAGE does not exist. Build the OS first."
     fi
 
-    info "Starting TeaPotOS..."
+    info "Starting TeapotOS..."
 
     if [ "$debug" -eq 1 ]; then
         qemu-system-i386 \
